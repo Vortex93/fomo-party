@@ -1,0 +1,70 @@
+	familyparty/cmd/server		coverage: 0.0% of statements
+ok  	familyparty/internal/game	(cached)	coverage: 86.7% of statements
+ok  	familyparty/internal/server	(cached)	coverage: 69.9% of statements
+?   	familyparty/web	[no test files]
+TAP version 13
+# Subtest: user text is escaped in every HTML context
+ok 1 - user text is escaped in every HTML context
+  ---
+  duration_ms: 1.082371
+  type: 'test'
+  ...
+# Subtest: room codes are capped and normalized
+ok 2 - room codes are capped and normalized
+  ---
+  duration_ms: 0.239835
+  type: 'test'
+  ...
+# Subtest: timer follows the server offset and never goes negative
+ok 3 - timer follows the server offset and never goes negative
+  ---
+  duration_ms: 0.216174
+  type: 'test'
+  ...
+# Subtest: five requested games and nine labeled memory symbols exist
+ok 4 - five requested games and nine labeled memory symbols exist
+  ---
+  duration_ms: 0.219648
+  type: 'test'
+  ...
+# Subtest: QR has version-five dimensions and fixed finder patterns
+ok 5 - QR has version-five dimensions and fixed finder patterns
+  ---
+  duration_ms: 2.51373
+  type: 'test'
+  ...
+# Subtest: QR matches an independently generated reference matrix
+ok 6 - QR matches an independently generated reference matrix
+  ---
+  duration_ms: 1.938202
+  type: 'test'
+  ...
+# Subtest: QR rejects oversized links instead of silently corrupting them
+ok 7 - QR rejects oversized links instead of silently corrupting them
+  ---
+  duration_ms: 3.659131
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 95.461714
+go vet: PASS
+Created room S4QJRE
+Four players + read-only TV connected
+Same Brain scoring verified
+Reload/reconnect preserves identity and score
+Bluffer privacy, discussion, vote and reveal verified
+Canvas sync, secret word, pause and correct guesses verified
+Most Likely nomination/scoring verified
+Memory hides target and scores ordered taps
+Duplicate tab stops reconnecting; latest tab remains connected
+PASS: all five games, reconnect, duplicate tabs, TV, rematch, responsive widths; zero browser exceptions
+
+Native Linux release: startup, health, embedded assets, headers, graceful shutdown PASS
+Windows x64 release: cross-compilation PASS (not executed on Windows)

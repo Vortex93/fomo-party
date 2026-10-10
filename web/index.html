@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f6f4ef">
+    <meta name="description" content="Five little games. One very good family night. Join on your phone and play together.">
+    <title>Family Party — Small screens. Big laughs.</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+</head>
+<body>
+    <a href="#main" class="skip-link">Skip to game</a>
+    <header class="site-header">
+        <a class="wordmark" href="/" aria-label="Family Party home"><span class="logo-mark" aria-hidden="true">✳</span> family<span class="wordmark-light">party</span><span class="wordmark-dot">.</span></a>
+        <div class="header-actions"><span id="connection" class="connection"><span class="status-dot"></span>Made for together</span><button type="button" id="help-open" class="button button-quiet">How to play <span aria-hidden="true">↗</span></button></div>
+    </header>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <main id="main" tabindex="-1"><section class="loading"><span class="eyebrow">THE BEST KIND OF SCREEN TIME</span><h1>Small screens.<br>Big laughs.</h1><p>Getting your game night ready…</p></section></main>
+    <footer class="site-footer"><span>Less scrolling. More together.</span><span>Private rooms · No accounts · No ads</span></footer>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+        <form method="dialog"><button class="button button-quiet dialog-close" aria-label="Close instructions">✕</button></form>
+        <span class="eyebrow">EVERYONE'S INVITED</span><h2 id="help-title">Your living room.<br>A little more lively.</h2>
+        <div class="help-steps"><p><b>01</b><span><strong>Make a room.</strong> One person chooses a nickname and creates the game.</span></p><p><b>02</b><span><strong>Bring your people.</strong> Join from a phone using the six-character code or QR code. No accounts.</span></p><p><b>03</b><span><strong>Play a little of everything.</strong> Ready up, answer, draw, vote, and remember. Scores carry across the playlist.</span></p></div>
+        <p class="muted">All five games need at least four players together. With two or three players, the host can choose a smaller playlist. The TV view is optional and never counts as a player.</p>
+        <p class="muted">Be kind. The host can pause or skip a round at any time. Secret roles are private to each phone. Keep memory screens hidden after the reveal—this is a friendly game, not a cheat-proof competition.</p>
+        <form method="dialog"><button class="button button-primary full">Let's play</button></form>
+    </dialog>
+    <noscript><p class="notice error">Enable JavaScript to join and play the real-time games.</p></noscript>
+</body>
+</html>

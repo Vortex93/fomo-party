@@ -1,0 +1,13 @@
+{
+    "name": "family-party",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Dependency-free family party games with a Go server",
+    "scripts": {
+        "start": "go run ./cmd/server",
+        "test": "node --test tests/client.test.mjs",
+        "test:go": "go test -race ./..."
+    },
+    "engines": { "node": ">=18" }
+}

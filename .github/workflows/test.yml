@@ -1,0 +1,19 @@
+name: Test
+on: [push, pull_request]
+permissions:
+    contents: read
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-go@v5
+              with:
+                  go-version: stable
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: lts/*
+            - run: go test -race -cover ./...
+            - run: go vet ./...
+            - run: node --test tests/client.test.mjs
+            - run: go build ./cmd/server
