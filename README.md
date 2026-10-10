@@ -13,7 +13,51 @@ Requires **Go 1.23 or newer**. Node is optional and used only for JavaScript tes
 go run ./cmd/server
 ```
 
-Open `http://localhost:8080` on the computer running the server.
+Run `./start.sh` (or the Go command above) and open `http://localhost:8080`
+on the computer running the server. Create a room and wait for its **internet
+invite** to appear, then share the QR/link. Phones can use Wi-Fi **or mobile data**:
+they load the UI from `https://vortex93.github.io/fomo-party/`, then connect to
+the host's browser with PeerJS/WebRTC. They never need to reach your local HTTP
+server. **Keep both the host browser tab and Go server running.** Closing or
+suspending the host tab disconnects internet guests; reopening the same room in
+that tab restores its saved invite. Browser background throttling can interrupt
+play, so prefer a foreground desktop host.
+
+The public page cannot create rooms: it needs the host's complete invite link
+(including `#p=...`), not just the six-character code. The room's Go server still
+owns timers, permissions, private views, and scores. The transport host does not
+migrate when the game appoints a new player as host.
+
+### NAT traversal and TURN
+
+PeerJS Cloud (`0.peerjs.com`) exchanges setup messages. Google's STUN server is
+enabled by default. Game messages use encrypted WebRTC data channels, not the
+signaling server. **STUN does not guarantee connectivity across cellular CGNAT,
+symmetric NAT, or restrictive firewalls.** Configure your own TURN service for
+relay fallback; the application does not provide or invent free TURN credentials:
+
+```sh
+export FOMO_ICE_SERVERS='[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:YOUR-TURN-HOST:3478?transport=udp","turns:YOUR-TURN-HOST:5349?transport=tcp"],"username":"YOUR-USER","credential":"YOUR-PASSWORD"}]'
+./start.sh
+```
+
+Use real provider-issued credentials (prefer short-lived credentials). They are
+read by the local host page, never put in guest links or Pages assets. Do not
+commit them. TURN on the host supplies a reachable relay candidate even when
+the guest is behind restrictive NAT; actual cellular/firewall support must be
+verified with your TURN provider and devices. A TURN relay carries encrypted game
+traffic and may incur bandwidth costs. If signaling fails, the UI reports it and
+same-server HTTP/SSE play remains available.
+
+The guest page is deployed by `.github/workflows/pages.yml`. For your own HTTPS
+static hosting, deploy `web/index.html`, `styles.css`, `app.js`, and `lib/`, then
+run `./start.sh --internet-url https://YOUR-HOST/party/` (include the trailing
+slash). PeerJS 1.5.5 is vendored under `web/lib/` with its MIT license: no CDN
+script dependency or runtime package installation is required.
+
+### Same-server fallback
+
+Open the host's LAN address to join directly using HTTP/SSE.
 The terminal also prints local network addresses. **On phones, open the computer's
 Wi-Fi address**, such as `http://192.168.1.5:8080`, not `localhost`.
 Keep the server running and allow port 8080 on your private-network firewall.
@@ -55,16 +99,19 @@ timers and scores; reload/reconnect support; automatic host handoff after a
 15-second disconnect; duplicate-tab protection; lobby player removal; bounded
 rooms, requests, input, drawing history, and connection queues.
 
-No accounts, external fonts, CDN calls, analytics, advertising, database, or
-runtime JavaScript dependencies are used.
+No accounts, external fonts, CDN script loads, analytics, advertising, or database
+are used. Internet invites contact PeerJS Cloud and STUN (and your optional TURN
+provider); the PeerJS browser library is bundled locally.
 
 ## Stack and engine
 
 - **Server:** Go standard library, with a deterministic game-rules package.
 - **UI:** plain JavaScript ES modules, HTML, and CSS.
 - **Drawing:** HTML Canvas, normalized points, small ordered stroke batches.
-- **Realtime:** a fetch-based server-sent event stream for updates; authenticated
-  HTTP POST commands for player actions. This implementation does **not** use WebSockets.
+- **Realtime:** local clients use authenticated HTTP POST and fetch-based SSE.
+  Internet guests use PeerJS/WebRTC data channels to the local host browser, which
+  bridges only that room to the same authenticated API/SSE stream. PeerJS signaling
+  uses secure WebSockets; game data is not sent over those sockets.
 - **Distribution:** the frontend is embedded inside one Go executable.
 
 SvelteKit was considered initially. Package downloads were unavailable during
@@ -93,7 +140,7 @@ changing frontend files; there is no hot-reload watcher or separate npm build.
 ```sh
 go test -race -cover ./...
 go vet ./...
-node --test tests/client.test.mjs
+node --test tests/*.test.mjs
 ```
 
 `-race` needs a supported Go race toolchain; omit that flag where unavailable.
@@ -175,3 +222,26 @@ The prompt bank is family-friendly, but player-written names and answers are not
 automatically moderated. The host can remove a player in the lobby or skip a round.
 This is a friendly party game, not a cheat-proof contest: someone could inspect
 or record information already shown on their own phone.
+
+
+### Internet transport verification
+
+```sh
+go test -race ./...
+go vet ./...
+node --test tests/*.test.mjs
+# Optional browser test: install only test dependencies and Chromium.
+npm ci
+npx playwright install chromium
+npm run test:browser
+# Or use an existing browser instead of installing Chromium:
+FOMO_TEST_BROWSER=/usr/bin/brave-browser npm run test:browser
+```
+
+The browser test uses real PeerJS Cloud and WebRTC between isolated host and
+mobile-sized guest contexts. The guest origin has static files only, not an API;
+it checks join, ready, rejected non-host actions, reload/resume, disconnect/
+reconnect, leaving, and horizontal overflow. It requires internet access and
+verifies the transport on one machine, **not real cellular NAT or TURN service
+reachability**. Test Wi-Fi versus cellular separately with your actual devices
+and configured relay. No browser test dependency is needed to run the game.

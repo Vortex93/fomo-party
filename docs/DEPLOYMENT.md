@@ -91,3 +91,23 @@ bearer tokens in request headers; serve HTTPS when outside a trusted local setup
 Text is escaped and request inputs are validated, but player content is not
 moderated for meaning. Audit the deployment and abuse model before making a
 public multi-tenant service available.
+
+
+## PeerJS internet invites
+
+The local host browser now bridges remote guests to the authoritative Go server.
+Guests load the static HTTPS UI from GitHub Pages and use the full invite URL to
+find the host via PeerJS Cloud. WebRTC data channels carry requests and each
+player's authenticated private SSE events; the bridge cannot create rooms or
+proxy arbitrary URLs. Host tab and Go server must remain running. Reconnects
+resubscribe for fresh state; uncertain action writes are never automatically
+replayed. Large drawing snapshots use bounded ordered application chunks.
+
+Default STUN helps with NAT traversal but is not sufficient for all cellular
+networks. `FOMO_ICE_SERVERS` configures optional host-side TURN credentials; see
+README for the configuration and privacy/cost caveats. LAN HTTP/SSE remains
+available. `--internet-url` selects a different HTTPS static guest page, including
+its path and trailing slash. This browser bridge is deliberately simpler than
+Anvil's native Go WebRTC/yamux tunnel and does not inherit its password pairing,
+workspace permissions, or direct-only policy. Anyone with the invite can request
+a player/viewer session, just as someone with the original room code could.

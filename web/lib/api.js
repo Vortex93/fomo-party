@@ -1,8 +1,11 @@
+import { remote } from './peer.js';
+
 export class APIError extends Error {
     constructor(message, status) { super(message); this.status = status; }
 }
 
 export async function request(path, body, session = null) {
+    if (remote) return remote.request(path, body, session);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     const headers = { 'Content-Type': 'application/json' };
@@ -22,6 +25,7 @@ export async function request(path, body, session = null) {
 // This stream uses fetch instead of EventSource: bearer credentials stay out
 // of URLs. Server state is authoritative; disconnected actions are never queued.
 export function connect(session, onEvent, onStatus) {
+    if (remote) return remote.subscribe(session, onEvent, onStatus);
     let stopped = false;
     let active = null;
     let retryTimer = null;

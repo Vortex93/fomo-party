@@ -15,5 +15,5 @@ jobs:
                   node-version: lts/*
             - run: go test -race -cover ./...
             - run: go vet ./...
-            - run: node --test tests/client.test.mjs
+            - run: node --test tests/*.test.mjs
             - run: go build ./cmd/server

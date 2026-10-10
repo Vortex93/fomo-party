@@ -1,4 +1,5 @@
 import { connect, request } from './lib/api.js';
+import { remote, startHost, inviteURL } from './lib/peer.js';
 import { DrawingBoard } from './lib/canvas.js';
 import { renderQR } from './lib/qr.js';
 import { GAMES, SYMBOLS, BRUSHES, escapeHTML as e, initials, gameInfo, secondsLeft, normalizeRoomCode } from './lib/ui.js';
@@ -9,6 +10,7 @@ const connection = document.querySelector('#connection');
 const help = document.querySelector('#help-dialog');
 const ui = { mode: 'create', name: '', code: '', answer: '', memory: [], phaseKey: '', busy: false, brush: 0, width: 7 };
 let info = null, session = null, state = null, stopStream = null;
+let internetRoute = null, stopInternet = null, hostingSession = null;
 let status = 'idle', clockOffset = 0, noticeTimeout = null, board = null, contentKey = '', shareKey = '';
 
 function notify(message, error = false) {
@@ -21,8 +23,9 @@ function notify(message, error = false) {
     close.addEventListener('click', () => { notice.hidden = true; }); notice.append(close);
     noticeTimeout = setTimeout(() => { notice.hidden = true; }, error ? 12000 : 5000);
 }
-function savedSession() { try { return JSON.parse(sessionStorage.getItem('familyparty.session') || 'null'); } catch { return null; } }
-function saveSession(value) { try { if (value) sessionStorage.setItem('familyparty.session', JSON.stringify(value)); else sessionStorage.removeItem('familyparty.session'); } catch { /* Play still works when storage is blocked, but reload cannot resume. */ } }
+const storageKey = `familyparty.session.${remote?.route || 'local'}`;
+function savedSession() { try { return JSON.parse(sessionStorage.getItem(storageKey) || 'null'); } catch { return null; } }
+function saveSession(value) { try { if (value) sessionStorage.setItem(storageKey, JSON.stringify(value)); else sessionStorage.removeItem(storageKey); } catch { /* Play still works when storage is blocked, but reload cannot resume. */ } }
 function player(id) { return state?.players.find((p) => p.id === id); }
 function host() { return state && !state.isViewer && state.hostId === state.youId; }
 function blocked() { return status !== 'connected' || ui.busy || state?.round?.paused; }
@@ -62,11 +65,11 @@ function renderHome() {
                 <div class="hero-doodle" aria-hidden="true"><span class="doodle-star">✳</span><span class="doodle-spark">✦</span><span class="doodle-note">a little friendly competition ↗</span></div>
             </div>
             <section class="entry-card" aria-labelledby="entry-title"><div class="entry-top"><span class="eyebrow">MAKE TONIGHT A GAME NIGHT</span><span class="little-ticket">PLAY!</span></div>
-                <h2 id="entry-title">Pull up a phone.</h2><div class="tabs" role="group" aria-label="Room action"><button type="button" data-action="mode" data-value="create" aria-pressed="${ui.mode === 'create'}" class="tab ${ui.mode === 'create' ? 'selected' : ''}">Create a room</button><button type="button" data-action="mode" data-value="join" aria-pressed="${ui.mode === 'join'}" class="tab ${ui.mode === 'join' ? 'selected' : ''}">Join a room</button></div>
+                <h2 id="entry-title">Pull up a phone.</h2><div class="tabs" role="group" aria-label="Room action"><button type="button" data-action="mode" data-value="create" ${disabled(Boolean(remote))} aria-pressed="${ui.mode === 'create'}" class="tab ${ui.mode === 'create' ? 'selected' : ''}">Create a room</button><button type="button" data-action="mode" data-value="join" aria-pressed="${ui.mode === 'join'}" class="tab ${ui.mode === 'join' ? 'selected' : ''}">Join a room</button></div>
                 <form id="entry-form"><label for="nickname">What should we call you?</label><input id="nickname" name="nickname" maxlength="20" placeholder="Your nickname" autocomplete="nickname" value="${e(ui.name)}" required>
                     ${ui.mode === 'join' ? `<label for="room-code">Room code</label><input id="room-code" name="code" class="code-input" minlength="6" maxlength="6" placeholder="ABC234" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${e(ui.code)}" required>` : ''}
                     <button type="submit" class="button button-primary full entry-submit" ${disabled(ui.busy)}>${ui.busy ? 'Getting ready…' : ui.mode === 'create' ? 'Make some memories' : 'Join the fun'} <span aria-hidden="true">→</span></button>
-                </form><p class="entry-foot">${ui.mode === 'create' ? 'You host. Everyone else joins with a code.' : 'Ask the host for the six-character room code.'}</p>
+                </form><p class="entry-foot">${ui.mode === 'create' ? 'You host. Everyone else joins with a code.' : 'Use the host’s internet invite link, or a room code on the same server.'}</p>
                 ${ui.mode === 'join' ? '<button type="button" class="button button-quiet full" data-action="watch-home">Open TV / watch-only view</button>' : ''}
                 ${saved?.code ? `<button type="button" class="button button-outline full resume" data-action="resume">Return to room ${e(saved.code)} ↗</button>` : ''}
             </section>
@@ -77,7 +80,9 @@ function renderHome() {
 }
 
 function joinURL(watch = false) {
-    const url = new URL(info?.publicURL || location.origin);
+    const route = remote?.route || internetRoute;
+    if (route) return inviteURL(info?.internetURL || new URL('./', location.href).href, state.code, route, watch);
+    const url = new URL(info?.publicURL || new URL('./', location.href).href);
     url.searchParams.set(watch ? 'watch' : 'room', state.code);
     return url.toString();
 }
@@ -99,7 +104,7 @@ function renderRoom() {
         if (shareKey !== share) {
             shareKey = share;
             const localOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(share).hostname);
-            document.querySelector('#share-panel').innerHTML = `<div class="aside-heading"><h3>Invite your people</h3><span aria-hidden="true">↗</span></div><div class="share-body"><div id="qr-code" class="qr-code"></div><div><span class="eyebrow">ROOM CODE</span><strong class="share-code">${e(state.code)}</strong><p class="muted">Scan. Pick a name.<br>You're in.</p></div></div>${localOnly ? '<p class="local-warning">Phones cannot use localhost. Open this site using your computer’s Wi-Fi IP, or restart with --public-url set to that address.</p>' : ''}<button class="button button-outline full" data-action="copy">Copy invite link</button><a class="button button-quiet full" href="${e(joinURL(true))}" target="_blank" rel="noopener">Open TV view <span aria-hidden="true">↗</span></a>`;
+            document.querySelector('#share-panel').innerHTML = `<div class="aside-heading"><h3>Invite your people</h3><span aria-hidden="true">↗</span></div><div class="share-body"><div id="qr-code" class="qr-code"></div><div><span class="eyebrow">ROOM CODE</span><strong class="share-code">${e(state.code)}</strong><p class="muted">Scan. Pick a name.<br>You're in.</p></div></div>${internetRoute ? '<p class="muted">Internet invite: keep this host tab and server running. Some networks need a TURN relay.</p>' : ''}${localOnly ? '<p class="local-warning">Phones cannot use localhost. Open this site using your computer’s Wi-Fi IP, or restart with --public-url set to that address.</p>' : ''}<button class="button button-outline full" data-action="copy">Copy invite link</button><a class="button button-quiet full" href="${e(joinURL(true))}" target="_blank" rel="noopener">Open TV view <span aria-hidden="true">↗</span></a>`;
             try { renderQR(document.querySelector('#qr-code'), share); } catch (error) { document.querySelector('#qr-code').textContent = 'Use the room code'; }
         }
         const key = `${state.status}:${state.round?.id || ''}:${state.round?.phase || ''}:${state.youId}`;
@@ -241,6 +246,18 @@ function begin(credentials) {
     stopStream?.(); board?.destroy(); board = null;
     session = credentials; state = null; shareKey = ''; contentKey = ''; ui.phaseKey = ''; ui.answer = ''; ui.memory = [];
     saveSession(credentials);
+    if (!remote && credentials.bridgeId && info) {
+        stopInternet?.(); stopInternet = null; internetRoute = null; hostingSession = credentials;
+        request('/api/peer-config', {}, credentials).then((config) => {
+            if (hostingSession !== credentials) return null;
+            return startHost(credentials.bridgeId, { code: credentials.code, info: { ...info, ...config }, request, connect, onError: (message) => notify(message, true) });
+        })
+            .then((stop) => {
+                if (!stop) return;
+                if (hostingSession !== credentials) { stop(); return; }
+                stopInternet = stop; internetRoute = credentials.bridgeId; if (state) renderRoom();
+            }).catch((error) => { if (hostingSession === credentials) notify(`${error.message} Same-Wi-Fi play is still available.`, true); });
+    }
     const url = new URL(location.href); url.search = ''; url.searchParams.set(credentials.watch ? 'watch' : 'room', credentials.code); history.replaceState(null, '', url);
     main.innerHTML = '<section class="empty-state"><span class="big-icon">✳</span><h1>Finding your people…</h1><p>Your game room is getting ready.</p><button class="button button-quiet" data-action="home">Back home</button></section>';
     stopStream = connect(credentials, (event) => {
@@ -274,8 +291,12 @@ async function leave() {
     if (state?.status === 'playing' && !confirm('Leave this game? Your seat and score stay in this game night, but you will stop playing.')) return;
     const previous = status === 'replaced' ? null : session;
     stopStream?.(); stopStream = null; session = null; state = null; board?.destroy(); board = null;
-    saveSession(null); history.replaceState(null, '', '/'); setStatus('idle'); renderHome();
-    if (previous) request('/api/leave', {}, previous).catch(() => {});
+    hostingSession = null; stopInternet?.(); stopInternet = null; internetRoute = null;
+    ui.busy = true; main.innerHTML = '<section class="loading"><h1>Leaving room…</h1></section>';
+    if (previous) await request('/api/leave', {}, previous).catch(() => {});
+    if (remote) remote.destroy();
+    if (remote) { ui.mode = 'join'; ui.code = previous?.code || ui.code; }
+    ui.busy = false; saveSession(null); history.replaceState(null, '', remote ? `?room=${ui.code}#p=${remote.route}` : './'); setStatus('idle'); renderHome();
 }
 
 main.addEventListener('input', (event) => {
@@ -288,7 +309,9 @@ main.addEventListener('submit', async (event) => {
     if (event.target.id === 'entry-form') {
         if (ui.busy) return;
         ui.busy = true; renderHome();
-        try { const credentials = await request(ui.mode === 'create' ? '/api/rooms' : '/api/join', { name: ui.name, ...(ui.mode === 'join' ? { code: ui.code } : {}) }); begin(credentials); }
+        try { const credentials = await request(ui.mode === 'create' ? '/api/rooms' : '/api/join', { name: ui.name, ...(ui.mode === 'join' ? { code: ui.code } : {}) });
+            if (ui.mode === 'create') credentials.bridgeId = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+            begin(credentials); }
         catch (error) { notify(error.message, true); }
         finally { ui.busy = false; if (state) renderRoom(); else if (!session) renderHome(); }
     } else if (event.target.id === 'answer-form') await perform('answer', { value: ui.answer });
@@ -344,7 +367,12 @@ document.querySelector('#help-open').addEventListener('click', () => help.showMo
 setInterval(updateTimer, 250);
 
 async function init() {
-    try { info = await request('/api/info'); } catch (error) { notify(error.message, true); }
+    try { if (remote || !location.hostname.endsWith('github.io')) info = await request('/api/info'); } catch (error) { notify(error.message, true); }
+    if (remote) ui.mode = 'join';
+    if (!remote && location.hostname.endsWith('github.io')) {
+        main.innerHTML = '<section class="empty-state"><h1>Bring an invite.</h1><p>Open the internet invite link from the host. To host, run start.sh on your computer and open its local game page.</p></section>';
+        return;
+    }
     const query = new URLSearchParams(location.search);
     const watch = query.get('watch');
     const code = normalizeRoomCode(watch || query.get('room') || '');

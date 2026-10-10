@@ -19,14 +19,18 @@ import (
 )
 
 type API struct {
-	Hub       *Hub
-	publicURL string
-	limiter   *limiter
-	static    http.Handler
+	Hub         *Hub
+	publicURL   string
+	internetURL string
+	iceServers  []ICEServer
+	limiter     *limiter
+	static      http.Handler
 }
 
 func New(assets fs.FS, publicURL string) *API {
-	return &API{Hub: NewHub(), publicURL: strings.TrimSuffix(publicURL, "/"), limiter: &limiter{items: map[string]*bucket{}}, static: http.FileServer(http.FS(assets))}
+	a := &API{Hub: NewHub(), publicURL: strings.TrimSuffix(publicURL, "/"), limiter: &limiter{items: map[string]*bucket{}}, static: http.FileServer(http.FS(assets))}
+	_ = a.ConfigurePeers(DefaultInternetURL, "")
+	return a
 }
 
 func (a *API) Run(ctx context.Context) {
@@ -48,7 +52,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 	if !strings.HasPrefix(r.URL.Path, "/api/") {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			fail(w, 405, "Use GET for app files.")
@@ -59,7 +63,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if path == "" {
 			path = "index.html"
 		}
-		allowed := path == "index.html" || path == "styles.css" || path == "app.js" || path == "lib/api.js" || path == "lib/ui.js" || path == "lib/canvas.js" || path == "lib/qr.js"
+		allowed := path == "index.html" || path == "styles.css" || path == "app.js" || path == "lib/api.js" || path == "lib/ui.js" || path == "lib/canvas.js" || path == "lib/qr.js" || path == "lib/peer.js" || path == "lib/peerjs.min.js"
 		if !allowed {
 			http.NotFound(w, r)
 			return
@@ -78,7 +82,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/info" && r.Method == http.MethodGet {
-		respond(w, 200, map[string]any{"games": game.Catalog, "defaults": game.DefaultConfig(), "publicURL": a.publicURL, "maxPlayers": game.MaxPlayers})
+		respond(w, 200, map[string]any{"games": game.Catalog, "defaults": game.DefaultConfig(), "publicURL": a.publicURL, "internetURL": a.internetURL, "maxPlayers": game.MaxPlayers})
 		return
 	}
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -134,6 +138,13 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/api/peer-config":
+		if !a.Hub.IsCreator(code, token) {
+			fail(w, 403, "Only the room creator can read ICE configuration.")
+			return
+		}
+		respond(w, 200, map[string]any{"iceServers": a.iceServers})
+		return
 	case "/api/action":
 		var action game.Action
 		if err := readJSON(w, r, &action); err != nil {

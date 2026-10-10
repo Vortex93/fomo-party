@@ -86,13 +86,13 @@ class Harness:
 
     async def load(self, page, query='', storage=None):
         html = (ROOT/'web/index.html').read_text()
-        html = re.sub(r'<script[^>]*src="/app.js"[^>]*></script>', '', html)
-        html = html.replace('<link rel="stylesheet" href="/styles.css">', '<style>'+(ROOT/'web/styles.css').read_text()+'</style>')
-        files = ['lib/ui.js', 'lib/qr.js', 'lib/canvas.js', 'lib/api.js', 'app.js']
+        html = re.sub(r'<script[^>]*src="(?:\./|/)(?:app.js|lib/peerjs.min.js)"[^>]*></script>', '', html)
+        html = re.sub(r'<link rel="stylesheet" href="(?:\./|/)styles.css">', lambda _: '<style>'+(ROOT/'web/styles.css').read_text()+'</style>', html)
+        files = ['lib/ui.js', 'lib/qr.js', 'lib/canvas.js', 'lib/peer.js', 'lib/api.js', 'app.js']
         source = '\n'.join((ROOT/'web'/p).read_text() for p in files)
         source = re.sub(r'^import .*?;\n', '', source, flags=re.M)
         source = re.sub(r'^export ', '', source, flags=re.M)
-        source = source.replace('location.origin', 'window.__testURL.origin').replace('location.href', 'window.__testURL.href').replace('location.search', 'window.__testURL.search')
+        source = source.replace('location.origin', 'window.__testURL.origin').replace('location.href', 'window.__testURL.href').replace('location.search', 'window.__testURL.search').replace('location.hash', 'window.__testURL.hash').replace('location.hostname', 'window.__testURL.hostname')
         source = source.replace('history.replaceState', 'window.__testReplace').replace('sessionStorage', 'window.__testStorage')
         source = source.replace('setInterval(updateTimer, 250);', 'window.__timer = setInterval(updateTimer, 250);')
         source += '\nwindow.__state = () => state; window.__stop = () => { stopStream?.(); board?.destroy(); clearInterval(window.__timer); };'

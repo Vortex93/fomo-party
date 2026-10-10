@@ -18,9 +18,10 @@ type Hub struct {
 }
 
 type roomEntry struct {
-	game    *game.Room
-	viewers map[string]string // token -> viewer ID
-	streams map[string]*subscription
+	creatorToken string
+	game         *game.Room
+	viewers      map[string]string // token -> viewer ID
+	streams      map[string]*subscription
 }
 
 type subscription struct {
@@ -124,7 +125,7 @@ func (h *Hub) Create(name string) (Credentials, error) {
 	if err != nil {
 		return Credentials{}, err
 	}
-	h.rooms[code] = &roomEntry{game: r, viewers: map[string]string{}, streams: map[string]*subscription{}}
+	h.rooms[code] = &roomEntry{creatorToken: p.Token, game: r, viewers: map[string]string{}, streams: map[string]*subscription{}}
 	return Credentials{code, p.ID, p.Token, false}, nil
 }
 
@@ -282,4 +283,13 @@ func (h *Hub) Close() {
 			s.close()
 		}
 	}
+}
+
+// IsCreator keeps transport configuration scoped to the original room creator,
+// independently of later in-game host handoffs.
+func (h *Hub) IsCreator(code, token string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	e := h.rooms[code]
+	return e != nil && e.creatorToken == token && len(token) == 64
 }
